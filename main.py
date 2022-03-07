@@ -46,16 +46,22 @@ def alta():
     f.write(alias + ': ' + ipHstName + ' ' + versionSNMP + ' ' + comunidad + '\n')
     f.close()
     crearRRD(alias)
+    graficaInPaqsUni(alias)
+    graficaInPaqsIPv4(alias)
+    graficaOutMsjICMP(alias)
+    graficaInSeg(alias)
+    graficaOutDatagram(alias)
 
 def listarAgentes(agentes):
     for x in range(len(agentes) - 1):
         print(x+1,") " + agentes[x])
 
-def baja(agentes):
+def baja(agentes, numAgentes):
     global stop_t
     stop_t = True
-    global start_m
-    start_m = True
+    if(numAgentes > 0):
+        global start_m
+        start_m = True
     listarAgentes(agentes)
     print("Seleccione la opción que desea eliminar")
     num = pedirNumeroEntero()
@@ -90,7 +96,7 @@ def listarInterfaces(numInterfaces, comunidad, ipHstName):
                 print("\t" + str(k) + ") Descripcion: " + descripcion)
         else:
             print("\t" + str(k) + ") Descripcion: " + descripcion)
-        estadoAdm = "Estado administrativo: "
+        estadoAdm = ""
         estado = int(consultaSNMP(comunidad, ipHstName, "1.3.6.1.2.1.2.2.1.7." + str(k)))
         if(estado == 1):
             estadoAdm += "Up"
@@ -135,7 +141,10 @@ def updateRRD(comunidad, ipHstName, interfaz, alias):
                          '1.3.6.1.2.1.7.1.0'))
 
         valor = "N:" + str(total_inPaqsUni) + ':' + str(total_inPaqsIPv4) + ':' + str(total_outMsjICMP) + ':' + str(total_inSeg) + ':' + str(total_outDatagram)
-        rrdtool.update(alias + '.rrd', valor)
+        try:
+            rrdtool.update(alias + '.rrd', valor)
+        except ValueError :
+            time.sleep(1)
         time.sleep(1)
         global stop_t
         if(stop_t):
@@ -148,10 +157,10 @@ def iniciarMonitoreo(agente):
     stop_t = False
     info = agente.split()
     alias = info[0][:-1]
-    comunidad = info[3]
-    ipHstName = info[1]
     print("Seleccione la interfaz que desea monitorear del agente " + alias)
     num = pedirNumeroEntero()
+    comunidad = info[3]
+    ipHstName = info[1]
     t = threading.Thread(target = updateRRD, args = [comunidad, ipHstName, num, alias])
     t.start()
 
@@ -160,11 +169,11 @@ def crearGraficas(agentes):
     print("Seleccione la opción que desea reportar")
     num = pedirNumeroEntero()
     alias = agentes[num-1].split()[0][:-1]
-    """graficaInPaqsUni(alias)
+    graficaInPaqsUni(alias)
     graficaInPaqsIPv4(alias)
     graficaOutMsjICMP(alias)
     graficaInSeg(alias)
-    graficaOutDatagram(alias)"""
+    graficaOutDatagram(alias)
     c = canvas.Canvas("reporte_" + alias + ".pdf")
     #595.2 de ancho y 841.8 de alto
     #showPage() para terminar con una hoja
@@ -173,33 +182,59 @@ def crearGraficas(agentes):
     text.setFont("Helvetica-Bold", 16)
     text.textLine("Reporte del agente " + alias)
     c.drawText(text)
+    
+    tituloInPaqs = c.beginText(50, 775)
+    tituloInPaqs.setFont("Helvetica", 12)
+    tituloInPaqs.textLine("Gráfica de los paquetes unicast que ha recibido la interfaz monitoreada (OID 1.3.6.1.2.1.2.2.1.11.IdInterfaz).")
+    c.drawText(tituloInPaqs)
+    
     imgInPaqsUni = ImageReader("inPaqsUni_" + alias + ".png")
     imgInPaqsUni_w, imgInPaqsUni_h = imgInPaqsUni.getSize()
-    altura = 790 - imgInPaqsUni_h
+    altura = 760 - imgInPaqsUni_h
     c.drawImage(imgInPaqsUni, 50, altura)
+    
+    tituloInPaqsIPv4 = c.beginText(50, altura - 15)
+    tituloInPaqsIPv4.setFont("Helvetica", 12)
+    tituloInPaqsIPv4.textLine("Gráfica de los paquetes recibidos a protocolos IPv4 (OID 1.3.6.1.2.1.4.3.0).")
+    c.drawText(tituloInPaqsIPv4)
 
     imgInPaqsIPv4 = ImageReader("inPaqsIPv4_" + alias + ".png")
     imgInPaqsIPv4_w, imgInPaqsIPv4_h = imgInPaqsIPv4.getSize()
-    altura -= 10
+    altura -= 20
     altura -= imgInPaqsIPv4_h
     c.drawImage(imgInPaqsIPv4, 50, altura)
+    
+    tituloOutMsjICMP = c.beginText(50, altura - 15)
+    tituloOutMsjICMP.setFont("Helvetica", 12)
+    tituloOutMsjICMP.textLine("Gráfica de los mensajes ICMP enviados por el agente (OID 1.3.6.1.2.1.5.21.0).")
+    c.drawText(tituloOutMsjICMP)
 
     imgOutMsjICMP = ImageReader("outMsjICMP_" + alias + ".png")
     imgOutMsjICMP_w, imgOutMsjICMP_h = imgOutMsjICMP.getSize()
-    altura -= 10
+    altura -= 20
     altura -= imgOutMsjICMP_h
     c.drawImage(imgOutMsjICMP, 50, altura)
 
     c.showPage()
+    
+    tituloInSeg = c.beginText(50, 795)
+    tituloInSeg.setFont("Helvetica", 12)
+    tituloInSeg.textLine("Gráfica de los segmentos que ha recibido la interfaz monitoreada (OID 1.3.6.1.2.1.2.2.1.10.IdInterfaz).")
+    c.drawText(tituloInSeg)
 
     imgInSeg = ImageReader("inSeg_" + alias + ".png")
     imgInSeg_w, imgInSeg_h = imgInSeg.getSize()
-    altura = 790 - imgInSeg_h
+    altura = 780 - imgInSeg_h
     c.drawImage(imgInSeg, 50, altura)
+    
+    tituloOutData = c.beginText(50, altura - 15)
+    tituloOutData.setFont("Helvetica", 12)
+    tituloOutData.textLine("Gráfica de los datagramas entregados a usuarios UDP (OID 1.3.6.1.2.1.7.1.0).")
+    c.drawText(tituloOutData)
 
     imgOutDatagram = ImageReader("outDatagram_" + alias + ".png")
     imgOutDatagram_w, imgOutDatagram_h = imgOutDatagram.getSize()
-    altura -= 10
+    altura -= 20
     altura -= imgOutDatagram_h
     c.drawImage(imgOutDatagram, 50, altura)
 
@@ -209,6 +244,18 @@ salir = False
 opcion = 0
 start_m = True
 stop_t = False
+
+anosTranscurridos = 21
+diasRestantes = 97+54 #Días de septiembre, octubre, noviembre y diciembre del 2000 + días de Enero y Febrero de 2022
+diasBisiestos = 5#2004, 2008, 2012, 2016, 2020
+diasVividos = (365*(anosTranscurridos)) + diasRestantes + diasBisiestos
+
+print("\nFecha de nacimiento: 25 de Septiembre de 2000")
+print("Fecha final: 23 de Febrero de 2022")
+print("Días vividos: " + str(diasVividos))
+print("Modulo de 3 + 1: " + str((diasVividos%3)+1) + '\n\n')
+
+
 while not salir:
 
     #fecha = (7821%3)+1
@@ -220,7 +267,7 @@ while not salir:
     print('\nNúmero de dispositivos registrados', numAgentes,'\n')
     for x in range(len(agentes) - 1):
         resumenAgente(agentes[x], x)
-        if(start_m):
+        if(start_m and numAgentes > 0):
             iniciarMonitoreo(agentes[x])
     start_m = False
 
@@ -234,9 +281,11 @@ while not salir:
     opcion = pedirNumeroEntero()
 
     if opcion == 1:
+        stop_t = True
         alta()
     elif opcion == 2:
-        baja(agentes)
+        stop_t = True
+        baja(agentes, numAgentes)
     elif opcion == 3:
         crearGraficas(agentes)
         #stop = True
